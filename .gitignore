@@ -1,0 +1,21 @@
+# Виртуальная среда Python
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+
+# Векторная база (создаётся локально через python index.py)
+chroma_db/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env файлы
+.env

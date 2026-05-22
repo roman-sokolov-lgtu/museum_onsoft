@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Музейный ИИ-ассистент</title>
+  <meta name="description" content="Виртуальный гид музея на основе локальной языковой модели. Задайте вопрос об экспонате и получите ответ с указанием источника." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Токены ─────────────────────────────────── */
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #21262d;
+      --border:    #30363d;
+      --accent:    #7c6ae5;
+      --accent-h:  #9b8af4;
+      --user-bg:   #1c1f6e;
+      --bot-bg:    #1c2128;
+      --text:      #e6edf3;
+      --muted:     #7d8590;
+      --source:    #3fb950;
+      --error:     #f85149;
+      --radius:    14px;
+      --radius-sm: 8px;
+    }
+
+    /* ── Сброс и база ───────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Шапка ──────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .logo {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--accent), #4f9ef7);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    header p {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .status-dot {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s;
+    }
+    .dot.ok   { background: var(--source); box-shadow: 0 0 6px var(--source); }
+    .dot.err  { background: var(--error);  box-shadow: 0 0 6px var(--error); }
+
+    /* ── Область сообщений ───────────────────────── */
+    #chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      scroll-behavior: smooth;
+    }
+
+    #chat::-webkit-scrollbar { width: 5px; }
+    #chat::-webkit-scrollbar-track { background: transparent; }
+    #chat::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+    /* ── Сообщение ──────────────────────────────── */
+    .msg {
+      max-width: 720px;
+      width: 100%;
+      animation: fadeUp 0.22s ease;
+    }
+    .msg.user  { align-self: flex-end; }
+    .msg.bot   { align-self: flex-start; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .bubble {
+      padding: 13px 17px;
+      border-radius: var(--radius);
+      font-size: 0.93rem;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .msg.user .bubble {
+      background: var(--user-bg);
+      border: 1px solid #2d3180;
+      border-bottom-right-radius: 4px;
+    }
+
+    .msg.bot .bubble {
+      background: var(--bot-bg);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+
+    /* ── Аватарки ───────────────────────────────── */
+    .msg-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+    }
+    .msg.user .msg-row { flex-direction: row-reverse; }
+
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .msg.bot  .avatar { background: linear-gradient(135deg, var(--accent), #4f9ef7); }
+    .msg.user .avatar { background: var(--surface2); border: 1px solid var(--border); }
+
+    /* ── Источники ──────────────────────────────── */
+    .sources {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .source-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      background: rgba(63, 185, 80, 0.12);
+      border: 1px solid rgba(63, 185, 80, 0.35);
+      border-radius: 99px;
+      font-size: 0.72rem;
+      color: var(--source);
+      font-weight: 500;
+    }
+
+    .source-badge::before { content: "📄"; font-size: 0.7rem; }
+
+    /* ── Typing indicator ───────────────────────── */
+    .typing .bubble {
+      padding: 16px 17px;
+    }
+
+    .dots {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .dots span {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      animation: bounce 1.1s infinite;
+    }
+    .dots span:nth-child(2) { animation-delay: 0.18s; }
+    .dots span:nth-child(3) { animation-delay: 0.36s; }
+
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+      30%            { transform: translateY(-6px); opacity: 1; }
+    }
+
+    /* ── Область ввода ──────────────────────────── */
+    footer {
+      padding: 14px 16px 20px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #input-row {
+      max-width: 752px;
+      margin: 0 auto;
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    #question {
+      flex: 1;
+      resize: none;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.93rem;
+      line-height: 1.5;
+      padding: 11px 15px;
+      outline: none;
+      transition: border-color 0.2s;
+      min-height: 46px;
+      max-height: 140px;
+      overflow-y: auto;
+      field-sizing: content;
+    }
+
+    #question::placeholder { color: var(--muted); }
+    #question:focus { border-color: var(--accent); }
+
+    #send-btn {
+      flex-shrink: 0;
+      width: 46px;
+      height: 46px;
+      border-radius: var(--radius);
+      background: var(--accent);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    #send-btn:hover   { background: var(--accent-h); }
+    #send-btn:active  { transform: scale(0.95); }
+    #send-btn:disabled { background: var(--surface2); cursor: not-allowed; }
+
+    #send-btn svg { width: 20px; height: 20px; fill: #fff; }
+
+    .hint {
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    /* ── Пустой стейт ───────────────────────────── */
+    #empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: var(--muted);
+      text-align: center;
+      padding: 24px;
+      pointer-events: none;
+    }
+
+    #empty .icon { font-size: 48px; opacity: 0.4; }
+    #empty h2 { font-size: 1.05rem; font-weight: 500; color: var(--text); opacity: 0.6; }
+    #empty p  { font-size: 0.82rem; max-width: 340px; line-height: 1.6; }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+      pointer-events: all;
+      margin-top: 4px;
+    }
+
+    .chip {
+      padding: 6px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      color: var(--text);
+    }
+
+    .chip:hover {
+      border-color: var(--accent);
+      background: rgba(124, 106, 229, 0.1);
+    }
+
+    /* ── Адаптив ────────────────────────────────── */
+    @media (min-width: 768px) {
+      #chat         { padding: 28px 24px; }
+      footer        { padding: 14px 24px 22px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Шапка -->
+<header>
+  <div class="logo">🏛️</div>
+  <div>
+    <h1>Музейный ИИ-ассистент</h1>
+    <p>Виртуальный гид · Локальная модель</p>
+  </div>
+  <div class="status-dot">
+    <div class="dot" id="status-dot" title="Статус системы"></div>
+    <span id="status-text">проверка…</span>
+  </div>
+</header>
+
+<!-- Сообщения -->
+<div id="chat">
+  <div id="empty">
+    <div class="icon">🖼️</div>
+    <h2>Задайте вопрос об экспонате</h2>
+    <p>Ассистент отвечает на основе текстов музейной коллекции и всегда указывает источник.</p>
+    <div class="chips">
+      <div class="chip" onclick="ask('Расскажи о картине Репина «Бурлаки на Волге»')">Бурлаки на Волге</div>
+      <div class="chip" onclick="ask('Что такое Девятый вал?')">Девятый вал</div>
+      <div class="chip" onclick="ask('Кто такой Андрей Рублёв?')">Троица Рублёва</div>
+      <div class="chip" onclick="ask('Расскажи о яйце Фаберже')">Яйцо Фаберже</div>
+      <div class="chip" onclick="ask('Что изображено на картине «Богатыри»?')">Богатыри</div>
+      <div class="chip" onclick="ask('Расскажи о тульском самоваре')">Тульский самовар</div>
+    </div>
+  </div>
+</div>
+
+<!-- Ввод -->
+<footer>
+  <div id="input-row">
+    <textarea
+      id="question"
+      placeholder="Задайте вопрос об экспонате…"
+      rows="1"
+      autocomplete="off"
+      spellcheck="true"
+    ></textarea>
+    <button id="send-btn" onclick="sendQuestion()" title="Отправить (Enter)">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/>
+      </svg>
+    </button>
+  </div>
+  <p class="hint">Enter — отправить · Shift+Enter — новая строка</p>
+</footer>
+
+<script>
+  const chatEl   = document.getElementById('chat');
+  const inputEl  = document.getElementById('question');
+  const sendBtn  = document.getElementById('send-btn');
+  const emptyEl  = document.getElementById('empty');
+  const dotEl    = document.getElementById('status-dot');
+  const statusEl = document.getElementById('status-text');
+
+  let busy = false;
+
+  // ── Проверка здоровья ────────────────────────
+  async function checkHealth() {
+    try {
+      const r = await fetch('/health');
+      const d = await r.json();
+      if (d.status === 'ok') {
+        dotEl.className = 'dot ok';
+        statusEl.textContent = `готов · ${d.chunks} фрагментов`;
+      } else {
+        dotEl.className = 'dot err';
+        statusEl.textContent = d.database !== 'ok' ? 'нет индекса' : 'Ollama недоступна';
+      }
+    } catch {
+      dotEl.className = 'dot err';
+      statusEl.textContent = 'сервер недоступен';
+    }
+  }
+
+  checkHealth();
+  setInterval(checkHealth, 15000);
+
+  // ── Обработка клавиш ─────────────────────────
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendQuestion();
+    }
+  });
+
+  // ── Отправка вопроса ─────────────────────────
+  function ask(text) {
+    inputEl.value = text;
+    sendQuestion();
+  }
+
+  async function sendQuestion() {
+    const query = inputEl.value.trim();
+    if (!query || busy) return;
+
+    busy = true;
+    sendBtn.disabled = true;
+    inputEl.value = '';
+
+    hideEmpty();
+
+    // Сообщение пользователя
+    appendMsg('user', query);
+
+    // Typing indicator
+    const typingId = appendTyping();
+
+    try {
+      const res = await fetch('/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      });
+
+      removeTyping(typingId);
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Неизвестная ошибка' }));
+        appendMsg('bot', `⚠️ Ошибка: ${err.detail}`, []);
+      } else {
+        const data = await res.json();
+        appendMsg('bot', data.answer, data.sources || []);
+      }
+    } catch (e) {
+      removeTyping(typingId);
+      appendMsg('bot', '⚠️ Не удалось подключиться к серверу. Убедитесь, что бэкенд запущен.', []);
+    }
+
+    busy = false;
+    sendBtn.disabled = false;
+    inputEl.focus();
+  }
+
+  // ── DOM-хелперы ──────────────────────────────
+  function hideEmpty() {
+    if (emptyEl) emptyEl.style.display = 'none';
+  }
+
+  function appendMsg(role, text, sources = []) {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `msg ${role}`;
+
+    const avatar = role === 'bot' ? '🏛️' : '👤';
+    const sourcesHTML = (sources && sources.length)
+      ? `<div class="sources">${sources.map(s =>
+          `<span class="source-badge">${s}</span>`
+        ).join('')}</div>`
+      : '';
+
+    msgDiv.innerHTML = `
+      <div class="msg-row">
+        <div class="avatar">${avatar}</div>
+        <div>
+          <div class="bubble">${escHtml(text)}</div>
+          ${sourcesHTML}
+        </div>
+      </div>`;
+
+    chatEl.appendChild(msgDiv);
+    scrollBottom();
+  }
+
+  let typingCounter = 0;
+
+  function appendTyping() {
+    const id = `typing-${++typingCounter}`;
+    const div = document.createElement('div');
+    div.className = 'msg bot typing';
+    div.id = id;
+    div.innerHTML = `
+      <div class="msg-row">
+        <div class="avatar">🏛️</div>
+        <div class="bubble">
+          <div class="dots">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>`;
+    chatEl.appendChild(div);
+    scrollBottom();
+    return id;
+  }
+
+  function removeTyping(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  }
+
+  function scrollBottom() {
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  function escHtml(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+</script>
+</body>
+</html>
