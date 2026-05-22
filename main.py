@@ -239,19 +239,32 @@ async def ask(request: AskRequest):
 
     final_sources = []
     if not no_info and all_docs:
-        # Умный фильтр источников: ищем пересечения слов (только кириллица, длиннее 5 букв)
-        ans_words = set(w for w in re.findall(r"[а-яё]+", answer.lower()) if len(w) > 5)
+        # Умный фильтр: считаем количество общих слов (длиннее 4 букв) между ответом и каждым документом
+        ans_words = set(w for w in re.findall(r"[а-яё]+", answer.lower()) if len(w) > 4)
         
-        valid_docs = []
+        doc_intersections = []
         for doc, meta in all_docs:
-            doc_words = set(w for w in re.findall(r"[а-яё]+", doc.lower()) if len(w) > 5)
-            # Если есть хотя бы 3 общих слова, считаем документ использованным
-            if len(ans_words.intersection(doc_words)) >= 3:
-                valid_docs.append(meta["source"])
-                
-        # Берем только самый первый (наиболее релевантный) из тех, что реально подошли
-        if valid_docs:
-            final_sources.append(valid_docs[0])
+            doc_words = set(w for w in re.findall(r"[а-яё]+", doc.lower()) if len(w) > 4)
+            intersect_count = len(ans_words.intersection(doc_words))
+            doc_intersections.append((intersect_count, meta["source"]))
+            
+        # Сортируем документы по убыванию количества общих слов
+        doc_intersections.sort(key=lambda x: x[0], reverse=True)
+        
+        # Если лучший документ имеет хотя бы 4 общих смысловых слова, считаем его источником
+        best_count, best_source = doc_intersections[0]
+        if best_count >= 4:
+            final_sources.append(best_source)
+
+    # ── 10. Пост-фильтрация галлюцинаций
+    # Если нейросеть дала ответ, но ни один файл не прошел фильтр (нет общих слов), 
+    # значит она выдумала ответ из головы (как в случае с Бэтменом или Windows).
+    # Или если в ответе проскочил китайский иероглиф.
+    has_chinese = bool(re.search(r'[\u4e00-\u9fff]', answer))
+    
+    if (not no_info and not final_sources) or has_chinese:
+        answer = "К сожалению, в базе знаний музея нет информации по этому вопросу."
+        final_sources = []
 
     return {
         "answer": answer,
