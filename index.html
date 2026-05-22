@@ -388,6 +388,7 @@
   const statusEl = document.getElementById('status-text');
 
   let busy = false;
+  let history = [];  // история диалога
 
   // ── Проверка здоровья ────────────────────────
   async function checkHealth() {
@@ -444,7 +445,7 @@
       const res = await fetch('/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, history }),
       });
 
       removeTyping(typingId);
@@ -455,6 +456,10 @@
       } else {
         const data = await res.json();
         appendMsg('bot', data.answer, data.sources || []);
+        // Сохраняем в историю (последние 10 пар)
+        history.push({ role: 'user', content: query });
+        history.push({ role: 'assistant', content: data.answer });
+        if (history.length > 20) history = history.slice(-20);
       }
     } catch (e) {
       removeTyping(typingId);
