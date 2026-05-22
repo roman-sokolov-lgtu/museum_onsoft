@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 """
-index.py — Индексация текстов экспонатов в ChromaDB.
+index.py -- Индексация текстов экспонатов в ChromaDB.
 
 Запуск: python index.py
 
@@ -55,36 +56,36 @@ def chunk_text(text: str, max_words: int = 250) -> list[str]:
 
 def main():
     print("=" * 50)
-    print("  Музейный ИИ-ассистент — Индексация")
+    print("  Muzejnyj II-assistent -- Indeksaciya")
     print("=" * 50)
 
     # Проверяем наличие папки content/
     if not CONTENT_DIR.exists():
-        print(f"\n❌ Папка '{CONTENT_DIR}/' не найдена.")
-        print("   Создайте папку content/ и положите в неё .txt файлы с описаниями экспонатов.")
+        print(f"\n[ERR] Papka '{CONTENT_DIR}/' ne najdena.")
+        print("   Sozdajte papku content/ i polozhite v nee .txt fajly.")
         return
 
     txt_files = sorted(CONTENT_DIR.glob("*.txt"))
     if not txt_files:
-        print(f"\n❌ В папке '{CONTENT_DIR}/' нет .txt файлов.")
+        print(f"\n[ERR] V papke '{CONTENT_DIR}/' net .txt fajlov.")
         return
 
     print(f"\nНайдено файлов: {len(txt_files)}")
 
     # Проверяем Ollama
-    print(f"\nПроверяю Ollama ({OLLAMA_URL})...")
+    print(f"\nProverka Ollama ({OLLAMA_URL})...")
     try:
         resp = httpx.get(f"{OLLAMA_URL}/api/tags", timeout=5.0)
         resp.raise_for_status()
         models = [m["name"] for m in resp.json().get("models", [])]
-        print(f"  ✅ Ollama работает. Модели: {', '.join(models) if models else 'нет загруженных'}")
+        print(f"  [OK] Ollama rabotaet. Modeli: {', '.join(models) if models else 'net'}")
         if EMBED_MODEL not in " ".join(models):
-            print(f"\n  ⚠️  Модель '{EMBED_MODEL}' не найдена!")
-            print(f"     Запустите: ollama pull {EMBED_MODEL}")
+            print(f"\n  [WARN] Model '{EMBED_MODEL}' ne najdena!")
+            print(f"     Zapustite: ollama pull {EMBED_MODEL}")
             return
     except Exception as e:
-        print(f"  ❌ Ollama недоступна: {e}")
-        print("     Убедитесь, что Ollama запущена: ollama serve")
+        print(f"  [ERR] Ollama nedostupna: {e}")
+        print("     Ubedites chto Ollama zapushchena: ollama serve")
         return
 
     # Инициализация ChromaDB
@@ -93,7 +94,7 @@ def main():
     # Пересоздаём коллекцию (чистая индексация)
     try:
         client.delete_collection("museum_exhibits")
-        print("\nСтарый индекс удалён.")
+        print("\nStaryj indeks udalyon.")
     except Exception:
         pass
 
@@ -109,7 +110,7 @@ def main():
         text = filepath.read_text(encoding="utf-8").strip()
         chunks = chunk_text(text)
 
-        print(f"  📄 {filepath.name} → {len(chunks)} фрагмент(ов)")
+        print(f"  [FILE] {filepath.name} -> {len(chunks)} fragment(ov)")
 
         for i, chunk in enumerate(chunks):
             try:
@@ -129,12 +130,12 @@ def main():
                 )
                 total_chunks += 1
             except Exception as e:
-                print(f"    ⚠️  Ошибка при обработке фрагмента {i}: {e}")
+                print(f"    [WARN] Oshibka fragment {i}: {e}")
 
     print(f"\n{'=' * 50}")
-    print(f"✅ Готово! Проиндексировано: {len(txt_files)} файлов, {total_chunks} фрагментов.")
-    print(f"   База сохранена в: {CHROMA_PATH}/")
-    print(f"\nТеперь запустите сервер:")
+    print(f"[DONE] Proindeksirovano: {len(txt_files)} fajlov, {total_chunks} fragmentov.")
+    print(f"   Baza sohranena v: {CHROMA_PATH}/")
+    print(f"\nTeper zapustite server:")
     print(f"   uvicorn main:app --reload")
     print("=" * 50)
 

@@ -476,7 +476,8 @@
     msgDiv.className = `msg ${role}`;
 
     const avatar = role === 'bot' ? '🏛️' : '👤';
-    const sourcesHTML = (sources && sources.length)
+    const noData = text.includes('нет информации') || text.includes('нет данных');
+    const sourcesHTML = (sources && sources.length && !noData)
       ? `<div class="sources">${sources.map(s =>
           `<span class="source-badge">${s}</span>`
         ).join('')}</div>`

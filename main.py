@@ -18,7 +18,7 @@ OLLAMA_URL = "http://localhost:11434"
 CHAT_MODEL = "qwen2.5:3b"          # Легковесная модель для CPU
 EMBED_MODEL = "nomic-embed-text"    # Модель эмбеддингов
 CHROMA_PATH = "./chroma_db"         # Папка с базой ChromaDB
-DISTANCE_THRESHOLD = 0.85           # Порог релевантности (cosine, 0–2)
+DISTANCE_THRESHOLD = 1.1           # порог релевантности (cosine, 0–2)
 TOP_K = 3                           # Сколько фрагментов извлекать
 
 # ─── Приложение ───────────────────────────────────────────────────
@@ -39,10 +39,10 @@ def load_db():
     try:
         client = chromadb.PersistentClient(path=CHROMA_PATH)
         collection = client.get_collection("museum_exhibits")
-        print(f"✅ ChromaDB загружена: {collection.count()} фрагментов")
+        print(f"[OK] ChromaDB loaded: {collection.count()} fragments")
     except Exception as e:
-        print(f"⚠️  ChromaDB не готова: {e}")
-        print("   Запустите индексацию: python index.py")
+        print(f"[WARN] ChromaDB not ready: {e}")
+        print("   Run: python index.py")
         collection = None
 
 load_db()
