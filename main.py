@@ -21,8 +21,8 @@ CHAT_MODEL  = "qwen2.5:3b"
 EMBED_MODEL = "nomic-embed-text"
 CHROMA_PATH = "./chroma_db"
 CONTENT_DIR = Path("content")
-TOP_K       = 5          # документов из векторного поиска
-MAX_CONTEXT = 8          # максимум документов в промпте
+TOP_K       = 2          # документов из векторного поиска
+MAX_CONTEXT = 5          # максимум документов в промпте
 
 # ─── Приложение ───────────────────────────────────────────────────
 app = FastAPI(title="Музейный ИИ-ассистент")
@@ -73,8 +73,8 @@ def keyword_search(query: str, exclude_sources: set) -> list:
         if fname in exclude_sources:
             continue
         text_lower = text.lower()
-        # Считаем сколько ключевых слов встречается в тексте
-        score = sum(1 for w in words if w in text_lower)
+        # Считаем сколько раз ключевые слова встречаются в тексте
+        score = sum(text_lower.count(w) for w in words)
         if score > 0:
             hits.append((score, fname, text))
 
@@ -216,7 +216,7 @@ async def ask(request: AskRequest):
 
     # ── 8. Генерация
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             chat_resp = await client.post(
                 f"{OLLAMA_URL}/api/chat",
                 json={
@@ -229,6 +229,8 @@ async def ask(request: AskRequest):
             chat_resp.raise_for_status()
             answer = chat_resp.json()["message"]["content"]
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=503, detail=f"Ошибка генерации: {e}")
 
     # ── 9. Источники — только при реальном ответе
