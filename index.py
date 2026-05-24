@@ -31,7 +31,7 @@ def get_embedding(text: str) -> list:
     return resp.json()["embedding"]
 
 
-def chunk_text(text: str, max_words: int = 250) -> list[str]:
+def chunk_text(text: str, max_words: int = 70) -> list[str]:
     """Разбить текст на абзацы, объединяя короткие."""
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
     chunks = []
